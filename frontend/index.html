@@ -1,1 +1,144 @@
-<!DOCTYPE html><html><head><title>VenusMP</title></head><body><h1>Site carregado</h1></body></html>
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>VenusMP</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #1a1a1a; color: #eee; }
+    .hidden { display: none; }
+    button, input { margin: 5px; padding: 8px; }
+    .product { background: #2a2a2a; padding: 10px; margin: 10px 0; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h1>VenusMP - Loja de Canetas</h1>
+  <div id="login">
+    <input type="text" id="user_id" placeholder="Seu nome">
+    <input type="password" id="senha" placeholder="Senha">
+    <button onclick="login()">Entrar</button>
+  </div>
+
+  <div id="loja" class="hidden">
+    <h2>Produtos</h2>
+    <div id="produtos"></div>
+  </div>
+
+  <div id="admin" class="hidden">
+    <h2>Painel ADM</h2>
+    <input id="nome" placeholder="Nome do produto">
+    <input id="preco" placeholder="Preço" type="number">
+    <input id="estoque" placeholder="Estoque" type="number">
+    <button onclick="addProduto()">Adicionar Produto</button>
+    <h3>Pedidos Pendentes</h3>
+    <div id="pedidos"></div>
+  </div>
+
+<script>
+let token = "", role = "", user_id = "";
+
+function login() {
+  user_id = document.getElementById('user_id').value;
+  const senha = document.getElementById('senha').value;
+  fetch('/api/login', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({senha})
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.role === 'admin') {
+      token = senha;
+      role = 'admin';
+      document.getElementById('login').classList.add('hidden');
+      document.getElementById('admin').classList.remove('hidden');
+      carregarPedidos();
+    } else if (data.role === 'user') {
+      token = senha;
+      role = 'user';
+      document.getElementById('login').classList.add('hidden');
+      document.getElementById('loja').classList.remove('hidden');
+      carregarProdutos();
+    } else {
+      alert("Senha incorreta");
+    }
+  });
+}
+
+function carregarProdutos() {
+  fetch('/api/products')
+    .then(r => r.json())
+    .then(data => {
+      const area = document.getElementById('produtos');
+      area.innerHTML = "";
+      data.forEach(p => {
+        const el = document.createElement('div');
+        el.className = "product";
+        el.innerHTML = `<b>${p.name}</b><br>R$ ${p.price} | Estoque: ${p.stock}<br><button onclick="comprar(${p.id})">Comprar</button>`;
+        area.appendChild(el);
+      });
+    });
+}
+
+function comprar(id) {
+  fetch('/api/orders', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({senha: token, user_id, product_id: id})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) alert("Pedido realizado! Aguarde aprovação.");
+    else alert("Erro: " + (data.error || "desconhecido"));
+  });
+}
+
+function addProduto() {
+  const name = document.getElementById('nome').value;
+  const price = parseFloat(document.getElementById('preco').value);
+  const stock = parseInt(document.getElementById('estoque').value);
+  fetch('/api/admin/products', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Admin-Token': token
+    },
+    body: JSON.stringify({name, price, stock})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) alert("Produto adicionado!");
+    else alert("Erro ao adicionar produto");
+  });
+}
+
+function carregarPedidos() {
+  fetch('/api/admin/orders', {
+    headers: { 'X-Admin-Token': token }
+  })
+  .then(r => r.json())
+  .then(data => {
+    const area = document.getElementById('pedidos');
+    area.innerHTML = "";
+    data.forEach(p => {
+      const el = document.createElement('div');
+      el.className = "product";
+      el.innerHTML = `<b>${p.product_name}</b> por ${p.user_id}<br><button onclick="aprovar(${p.order_id})">Aprovar</button>`;
+      area.appendChild(el);
+    });
+  });
+}
+
+function aprovar(id) {
+  fetch('/api/admin/orders/' + id, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Admin-Token': token
+    },
+    body: JSON.stringify({status: 'aprovado'})
+  }).then(() => carregarPedidos());
+}
+</script>
+</body>
+</html>
